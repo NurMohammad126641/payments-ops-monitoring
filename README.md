@@ -59,20 +59,21 @@ opsmon list                      # show monitors and anomaly rules
 opsmon run --sink csv --out out  # write every monitor to out/*.csv
 ```
 
-The seed data contains a deliberate incident (ROCKET gateway timeouts in the last hour), so the
-run ends like this:
+The seed data contains a deliberate incident (ROCKET gateway timeouts in the last hour). This is
+the real output of the CI integration job:
 
 ```text
 monitor                 status  rows    seconds
-failure_reasons_hourly  ok      48      0.21
-money_flow_daily        ok      1240    0.35
-money_flow_hourly       ok      310     0.19
-provider_success_rate   ok      5       0.12
-total                                   0.87
-[CRITICAL] not_success_spike / ROCKET: 152 now vs 2.4 usual (63.3x)
+failure_reasons_hourly  ok      91         0.04
+money_flow_daily        ok      930        0.33
+money_flow_hourly       ok      199        0.05
+provider_success_rate   ok      5          0.03
+total                                      0.44
+[CRITICAL] not_success_spike / ROCKET: 152 now vs 2.1 usual (72.0x)
 ```
 
-Row counts and timings vary with the random seed and the time of day.
+Row counts vary with the random seed and the time of day. Each CI run uploads the generated CSVs
+as the `sample-output` artifact.
 
 ## Publishing to Google Sheets and Looker Studio
 
