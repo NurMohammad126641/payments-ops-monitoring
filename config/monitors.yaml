@@ -1,0 +1,40 @@
+# Monitor definitions. Each data source names the environment variable that holds its DSN;
+# no connection details or credentials belong in this file.
+sql_dir: ../sql
+max_workers: 6
+
+sources:
+  payments: PAYMENTS_DB_URL
+
+monitors:
+  - name: money_flow_hourly
+    title: Today's volume by hour, provider, direction and status
+    source: payments
+    query: money_flow_hourly.sql
+    tab: money_flow_hourly
+
+  - name: money_flow_daily
+    title: Last 30 days of volume by provider, direction and status
+    source: payments
+    query: money_flow_daily.sql
+    tab: money_flow_daily
+
+  - name: failure_reasons_hourly
+    title: Today's failed and pending transactions by provider response
+    source: payments
+    query: failure_reasons_hourly.sql
+    tab: failure_reasons_hourly
+
+  - name: provider_success_rate
+    title: Success rate per provider over the last 24 hours
+    source: payments
+    query: provider_success_rate.sql
+    tab: provider_success_rate
+
+anomalies:
+  - name: not_success_spike
+    title: Not-successful transactions in the last hour vs the 4-week same-hour average
+    source: payments
+    query: not_success_vs_baseline.sql
+    ratio: 1.5
+    min_count: 20

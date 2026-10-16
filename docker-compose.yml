@@ -1,0 +1,17 @@
+# Local demo database with synthetic data. Credentials here are for this throwaway container only.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: opsmon
+      POSTGRES_PASSWORD: opsmon
+      POSTGRES_DB: payments
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./demo/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opsmon -d payments"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

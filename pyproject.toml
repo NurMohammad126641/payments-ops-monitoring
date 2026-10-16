@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "payments-ops-monitoring"
+version = "1.0.0"
+description = "Config-driven monitoring for payment operations: PostgreSQL metrics to Google Sheets / Looker Studio, with baseline anomaly alerts."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Nur Mohammad Siddiq" }]
+keywords = ["monitoring", "fintech", "postgresql", "google-sheets", "looker-studio", "etl"]
+dependencies = [
+  "psycopg[binary]>=3.1",
+  "PyYAML>=6.0",
+  "python-dotenv>=1.0",
+  "requests>=2.31",
+]
+
+[project.optional-dependencies]
+sheets = ["google-api-python-client>=2.100", "google-auth>=2.23"]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+
+[project.scripts]
+opsmon = "opsmon.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: needs a seeded PostgreSQL database (PAYMENTS_DB_URL)"]
+addopts = "-m 'not integration'"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
