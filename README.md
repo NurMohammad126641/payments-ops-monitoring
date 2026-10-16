@@ -13,6 +13,8 @@ notice.
 **[▶ Live demo dashboard](https://nurmohammad126641.github.io/payments-ops-monitoring/)**: CI
 rebuilds it on every push by running the monitors against a seeded PostgreSQL database.
 
+[![Live demo dashboard](docs/dashboard.jpg)](https://nurmohammad126641.github.io/payments-ops-monitoring/)
+
 > **Where this comes from:** I built the original system at TallyKhata (Progoti Systems) to watch
 > money-in and money-out across bKash, Nagad, Rocket, NPSB and card rails. It fed the
 > dashboards that operations, support and engineering used every day. This repository is a clean,
