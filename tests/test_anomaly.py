@@ -1,6 +1,6 @@
 import math
 
-from opsmon.anomaly import detect
+from opsmon.anomaly import detect, write_csv
 
 
 def test_flags_rows_above_ratio_and_min_count():
@@ -39,3 +39,15 @@ def test_results_are_sorted_by_ratio_descending():
     found = detect("rule", rows, ratio=1.5, min_count=20)
 
     assert [a.key for a in found] == ["B", "C", "A"]
+
+
+def test_write_csv_includes_infinite_ratio_as_inf(tmp_path):
+    rows = [("ROCKET", 150, 2.5), ("VISA", 25, 0)]
+    path = tmp_path / "anomalies.csv"
+
+    write_csv(path, detect("spike", rows, ratio=1.5, min_count=20))
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert lines[0] == "rule,key,current,baseline,ratio,severity"
+    assert "spike,VISA,25.0,0.0,inf,critical" in lines
+    assert "spike,ROCKET,150.0,2.5,60.0,critical" in lines

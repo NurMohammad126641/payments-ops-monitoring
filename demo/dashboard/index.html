@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payments Ops Monitor: live demo</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root { --bg: #f4f6fa; --card: #ffffff; --ink: #1f2933; --muted: #616e7c; --line: #e4e7eb;
+          --blue: #1a73e8; --green: #12b886; --red: #e03131; --amber: #f08c00; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", Roboto, Arial, sans-serif; background: var(--bg); color: var(--ink); }
+  header { background: #102a43; color: #fff; padding: 18px 28px; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 4px 0 0; color: #bcccdc; font-size: 13px; }
+  main { padding: 20px 28px 32px; max-width: 1280px; margin: 0 auto; }
+  .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
+  .kpi, .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+  .kpi { padding: 14px 16px; }
+  .kpi span { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .kpi b { display: block; font-size: 26px; margin-top: 6px; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .card { padding: 14px 16px; }
+  .card h2 { font-size: 14px; margin: 0 0 10px; }
+  .chart { position: relative; height: 260px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; }
+  .badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; color: #fff; }
+  .critical { background: var(--red); } .warning { background: var(--amber); }
+  .ok { color: var(--green); font-weight: 600; }
+  footer { color: var(--muted); font-size: 12px; margin-top: 16px; }
+  @media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, 1fr); } .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Payments Ops Monitor</h1>
+  <p>Live demo built by CI from the synthetic demo database: the same tables the production
+     version published to Google Sheets for Looker Studio.</p>
+</header>
+<main>
+  <section class="kpis">
+    <div class="kpi"><span>Transactions (24h)</span><b id="k-total">-</b></div>
+    <div class="kpi"><span>Success rate (24h)</span><b id="k-rate">-</b></div>
+    <div class="kpi"><span>Failed (24h)</span><b id="k-failed">-</b></div>
+    <div class="kpi"><span>Pending (24h)</span><b id="k-pending">-</b></div>
+    <div class="kpi"><span>Open alerts</span><b id="k-alerts">-</b></div>
+  </section>
+
+  <section class="grid">
+    <div class="card"><h2>Alerts: last hour vs 4-week same-hour baseline</h2><div id="alerts"></div></div>
+    <div class="card"><h2>Success rate by provider (24h)</h2><div class="chart"><canvas id="c-rate"></canvas></div></div>
+    <div class="card"><h2>Daily transactions by provider (30 days)</h2><div class="chart"><canvas id="c-daily"></canvas></div></div>
+    <div class="card"><h2>Today, by hour and status</h2><div class="chart"><canvas id="c-hourly"></canvas></div></div>
+    <div class="card" style="grid-column: 1 / -1"><h2>Why transactions failed today (provider responses)</h2><div class="chart"><canvas id="c-reasons"></canvas></div></div>
+  </section>
+
+  <footer>
+    Generated <span id="generated"></span> from <code>opsmon run --sink csv</code>.
+    Data is synthetic (<code>demo/init/02_seed.sql</code>) and includes a deliberate ROCKET incident.
+    Source: <a href="https://github.com/NurMohammad126641/payments-ops-monitoring">github.com/NurMohammad126641/payments-ops-monitoring</a>
+  </footer>
+</main>
+
+<script>
+const COLORS = ["#1a73e8", "#12b886", "#f08c00", "#7048e8", "#e03131", "#0c8599", "#5c940d"];
+const STATUS_COLORS = { SUCCESS: "#12b886", FAILED: "#e03131", PENDING: "#f08c00" };
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [], field = "", quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (c === '"') { quoted = false; }
+      else { field += c; }
+    } else if (c === '"') { quoted = true; }
+    else if (c === ",") { row.push(field); field = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(field); rows.push(row); row = []; field = "";
+    } else { field += c; }
+  }
+  if (field || row.length) { row.push(field); rows.push(row); }
+  const [header, ...body] = rows.filter(r => r.length > 1 || r[0] !== "");
+  return body.map(r => Object.fromEntries(header.map((h, k) => [h, r[k]])));
+}
+
+async function load(name) {
+  const res = await fetch(name, { cache: "no-store" });
+  if (!res.ok) return [];
+  return parseCsv(await res.text());
+}
+
+const num = v => Number(v || 0);
+const fmt = n => n.toLocaleString("en-US");
+const sumBy = (rows, key, val) => rows.reduce((m, r) => (m[r[key]] = (m[r[key]] || 0) + num(r[val]), m), {});
+
+function renderAlerts(rows) {
+  const el = document.getElementById("alerts");
+  if (!rows.length) { el.innerHTML = '<p class="ok">No anomalies: every provider is within its usual range.</p>'; return; }
+  const body = rows.map(a => {
+    const ratio = a.ratio === "inf" ? "new" : num(a.ratio).toFixed(1) + "x";
+    return `<tr><td><span class="badge ${a.severity}">${a.severity.toUpperCase()}</span></td>
+      <td>${a.key}</td><td>${fmt(num(a.current))}</td><td>${num(a.baseline).toFixed(1)}</td><td>${ratio}</td></tr>`;
+  }).join("");
+  el.innerHTML = `<table><thead><tr><th>Severity</th><th>Provider</th><th>Last hour</th>
+    <th>Usual</th><th>Ratio</th></tr></thead><tbody>${body}</tbody></table>`;
+}
+
+(async () => {
+  const [rate, daily, hourly, reasons, anomalies] = await Promise.all([
+    load("provider_success_rate.csv"), load("money_flow_daily.csv"), load("money_flow_hourly.csv"),
+    load("failure_reasons_hourly.csv"), load("anomalies.csv"),
+  ]);
+
+  const total = rate.reduce((s, r) => s + num(r.total), 0);
+  const success = rate.reduce((s, r) => s + num(r.success), 0);
+  document.getElementById("k-total").textContent = fmt(total);
+  document.getElementById("k-rate").textContent = total ? (100 * success / total).toFixed(1) + "%" : "-";
+  document.getElementById("k-failed").textContent = fmt(rate.reduce((s, r) => s + num(r.failed), 0));
+  document.getElementById("k-pending").textContent = fmt(rate.reduce((s, r) => s + num(r.pending), 0));
+  document.getElementById("k-alerts").textContent = anomalies.length;
+  document.getElementById("generated").textContent = new Date(document.lastModified).toUTCString();
+  renderAlerts(anomalies);
+
+  const common = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } };
+
+  new Chart(document.getElementById("c-rate"), {
+    type: "bar",
+    data: { labels: rate.map(r => r.provider),
+            datasets: [{ label: "Success rate %", data: rate.map(r => num(r.success_rate_pct)),
+                         backgroundColor: rate.map(r => num(r.success_rate_pct) < 90 ? "#e03131" : "#1a73e8") }] },
+    options: { ...common, indexAxis: "y", plugins: { legend: { display: false } },
+               scales: { x: { min: Math.max(0, Math.floor(Math.min(...rate.map(r => num(r.success_rate_pct))) - 5)), max: 100 } } },
+  });
+
+  const days = [...new Set(daily.map(r => r.day))].sort();
+  const providers = [...new Set(daily.map(r => r.provider))].sort();
+  new Chart(document.getElementById("c-daily"), {
+    type: "line",
+    data: { labels: days.map(d => d.slice(5)),
+            datasets: providers.map((p, i) => ({
+              label: p, borderColor: COLORS[i % COLORS.length], backgroundColor: COLORS[i % COLORS.length],
+              tension: .3, pointRadius: 0,
+              data: days.map(d => daily.filter(r => r.day === d && r.provider === p)
+                                       .reduce((s, r) => s + num(r.txn_count), 0)) })) },
+    options: { ...common, scales: { y: { beginAtZero: true } } },
+  });
+
+  const hours = [...new Set(hourly.map(r => r.hour))].sort();
+  new Chart(document.getElementById("c-hourly"), {
+    type: "bar",
+    data: { labels: hours,
+            datasets: ["SUCCESS", "FAILED", "PENDING"].map(s => ({
+              label: s, backgroundColor: STATUS_COLORS[s],
+              data: hours.map(h => hourly.filter(r => r.hour === h && r.status === s)
+                                         .reduce((t, r) => t + num(r.txn_count), 0)) })) },
+    options: { ...common, scales: { x: { stacked: true }, y: { stacked: true } } },
+  });
+
+  const byReason = Object.entries(sumBy(reasons, "provider_response", "txn_count"))
+    .sort((a, b) => b[1] - a[1]).slice(0, 8);
+  new Chart(document.getElementById("c-reasons"), {
+    type: "bar",
+    data: { labels: byReason.map(r => r[0]),
+            datasets: [{ label: "Transactions", data: byReason.map(r => r[1]), backgroundColor: "#7048e8" }] },
+    options: { ...common, indexAxis: "y", plugins: { legend: { display: false } } },
+  });
+})();
+</script>
+</body>
+</html>

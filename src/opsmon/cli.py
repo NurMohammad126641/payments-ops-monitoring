@@ -7,10 +7,12 @@ import logging
 import os
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 from opsmon.alerts import build_alert, channels_from_env, dispatch
+from opsmon.anomaly import write_csv as write_anomalies_csv
 from opsmon.config import ConfigError, load_config
 from opsmon.runner import run_anomalies, run_monitors, summary_table
 from opsmon.sinks import CsvSink, GoogleSheetsSink, Sink
@@ -70,6 +72,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     results = run_monitors(config, sink, only=args.only)
     anomalies, failed_rules = run_anomalies(config, only=args.only)
     failed = [r for r in results if not r.ok] + failed_rules
+    if args.sink == "csv":
+        write_anomalies_csv(Path(args.out) / "anomalies.csv", anomalies)
 
     print(summary_table(results))
     for anomaly in anomalies:

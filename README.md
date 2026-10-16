@@ -10,6 +10,9 @@ PostgreSQL in parallel, published to Google Sheets for a Looker Studio dashboard
 against a 4-week baseline so that spikes in failed transactions raise an alert before customers
 notice.
 
+**[▶ Live demo dashboard](https://nurmohammad126641.github.io/payments-ops-monitoring/)**: CI
+rebuilds it on every push by running the monitors against a seeded PostgreSQL database.
+
 > **Where this comes from:** I built the original system at TallyKhata (Progoti Systems) to watch
 > money-in and money-out across bKash, Nagad, Rocket, NPSB and card rails. It fed the
 > dashboards that operations, support and engineering used every day. This repository is a clean,

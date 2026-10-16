@@ -7,9 +7,11 @@ it can be unit tested without a database.
 
 from __future__ import annotations
 
+import csv
 import math
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 
@@ -64,3 +66,13 @@ def detect(
             )
         )
     return sorted(found, key=lambda a: a.ratio, reverse=True)
+
+
+def write_csv(path: str | Path, anomalies: Sequence[Anomaly]) -> None:
+    """Write anomalies to a CSV file (used with the csv sink, e.g. by the demo dashboard)."""
+    with Path(path).open("w", newline="", encoding="utf-8") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(["rule", "key", "current", "baseline", "ratio", "severity"])
+        for a in anomalies:
+            ratio = "inf" if math.isinf(a.ratio) else a.ratio
+            writer.writerow([a.rule, a.key, a.current, a.baseline, ratio, a.severity])
